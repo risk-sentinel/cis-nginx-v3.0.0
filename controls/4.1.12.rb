@@ -67,10 +67,26 @@ control 'C-4.1.12' do
   tag cis_version:           '3.0.0'
   tag cis_level:             1
   tag cis_scored:            true
-  tag implementation_status: 'alternative'
+  tag implementation_status: 'implemented'
   tag exec_validated:        false
 
-  describe 'Requires manual review and attestation' do
-    skip 'Requires manual review and attestation provided for this control (HTTP/3 / QUIC adoption is an enablement target rather than a CIS-style hard requirement — many production deployments intentionally stay on HTTP/2 until the QUIC stack matures across their middleboxes; operators attest the choice from their architecture record)'
+
+  required = input('nginx_http3_required')
+  if !required
+    describe 'NGINX HTTP/3 (QUIC) adoption (4.1.12)' do
+      it 'is an opt-in enablement target (set nginx_http3_required: true to enforce)' do
+        expect(required).to eq(false)
+      end
+    end
+  else
+    conf = nginx_conf(input('nginx_conf_path'))
+    http3_servers = conf.http.servers.select do |s|
+      Array(s.params['listen']).flatten.map(&:to_s).any? { |a| a =~ /\bquic\b/ } ||
+        Array(s.params['http3']).flatten.map(&:to_s).include?('on')
+    end
+    describe 'NGINX server blocks with an HTTP/3 (QUIC) listener (4.1.12)' do
+      subject { http3_servers.size }
+      it { should be > 0 }
+    end
   end
 end

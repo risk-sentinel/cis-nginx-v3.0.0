@@ -48,9 +48,35 @@ control 'C-1.2.1' do
   tag cis_level:             1
   tag cis_scored:            true
   tag implementation_status: 'alternative'
+  tag attestation_category:  'policy'
   tag exec_validated:        false
 
-  describe 'Requires manual review and attestation' do
-    skip 'Requires manual review and attestation provided for this control (package-manager repository configuration is a container-image bake-time concern (or a host provisioning concern) — not something the running NGINX workload expresses; operators attest from their image-build pipeline)'
+
+  # Package-manager repository configuration is an image bake-time / host-
+  # provisioning concern not expressed by the running NGINX workload — converted
+  # to Pass-with-evidence against the boundary's image-build record
+  # (sparc-validate#154). Defaults via attestation_uri(:boundary, …), which
+  # resolves against boundary_docs_base; empty -> '' -> Skip. Local var is `uri`
+  # to avoid shadowing the attestation_uri helper method.
+  uri          = input('c_1_2_1_attestation_uri', value: attestation_uri(:boundary, 'C-1.2.1'))
+  max_age_days = input('c_1_2_1_attestation_max_age_days', value: 365)
+
+  if uri.to_s.empty?
+    describe 'NGINX package-manager repository configuration (1.2.1)' do
+      skip 'attestation-required: package-manager repository config is an image-build / host-provisioning concern. Set boundary_docs_base / c_1_2_1_attestation_uri to the image-build record, or supply a CMS-pattern attestation via `saf attest apply`.'
+    end
+  else
+    doc = document_attestation(uri, max_age_days: max_age_days)
+    describe "NGINX package-repo image-build attestation (1.2.1 — #{uri})" do
+      it 'is reachable (no connection error)' do
+        expect(doc.connection_error).to be_nil, "attestation unreachable: #{doc.connection_error}"
+      end
+      it 'exists' do
+        expect(doc.exists?).to eq(true)
+      end
+      it "is current within #{max_age_days} days" do
+        expect(doc.current?).to eq(true)
+      end
+    end
   end
 end

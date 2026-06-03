@@ -80,9 +80,34 @@ control 'C-5.1.2' do
   tag cis_level:             1
   tag cis_scored:            true
   tag implementation_status: 'alternative'
+  tag attestation_category:  'operational'
   tag exec_validated:        false
 
-  describe 'Requires manual review and attestation' do
-    skip 'Requires manual review and attestation provided for this control (the set of "approved HTTP methods" varies per location (REST APIs need PUT/PATCH/DELETE; GraphQL stays POST-only; static assets need GET/HEAD only) — operators attest per workload)'
+
+  approved = Array(input('nginx_approved_http_methods')).map { |m| m.to_s.upcase }
+  if approved.empty?
+    describe 'NGINX approved HTTP methods (5.1.2)' do
+      skip 'attestation-required: the approved method set varies per location (REST needs PUT/PATCH/DELETE; static assets GET/HEAD); set nginx_approved_http_methods to enable automated limit_except enforcement, or attest per workload.'
+    end
+  else
+    conf = nginx_conf(input('nginx_conf_path'))
+    methods = []
+    conf.http.servers.each do |s|
+      s.locations.each { |l| methods.concat(Array(l.params['limit_except']).flatten.map(&:to_s)) }
+    end
+    methods = methods.flat_map { |v| v.to_s.split }.reject { |t| t =~ /[{};]/ }.map(&:upcase).uniq
+
+    if methods.empty?
+      describe 'NGINX HTTP method restriction (5.1.2)' do
+        it 'defines at least one limit_except block when approved methods are configured' do
+          expect(methods).not_to be_empty
+        end
+      end
+    else
+      describe 'NGINX limit_except methods outside the approved set (5.1.2)' do
+        subject { methods.reject { |m| approved.include?(m) } }
+        it { should be_empty }
+      end
+    end
   end
 end

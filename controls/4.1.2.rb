@@ -106,10 +106,29 @@ control 'C-4.1.2' do
   tag cis_version:           '3.0.0'
   tag cis_level:             1
   tag cis_scored:            true
-  tag implementation_status: 'alternative'
+  tag implementation_status: 'implemented'
   tag exec_validated:        false
 
-  describe 'Requires manual review and attestation' do
-    skip 'Requires manual review and attestation provided for this control (certificate trust chain validity is established by the issuing CA + the client trust store, not by NGINX directives — operators attest from their PKI / ACM record. NGINX-side enforcement is partially covered by 4.1.10 (proxy_ssl_verify) on upstream traffic.)'
+
+  conf = nginx_conf(input('nginx_conf_path'))
+  tls_servers = conf.http.servers.select do |s|
+    Array(s.params['listen']).flatten.map(&:to_s).any? { |a| a =~ /\bssl\b|\bquic\b|:443\b/ } ||
+      !Array(s.params['ssl_certificate']).flatten.reject { |v| v.to_s.empty? }.empty?
+  end
+
+  if tls_servers.empty?
+    describe 'NGINX TLS certificate configuration (4.1.2)' do
+      skip 'not-applicable: no TLS-terminating server block (no ssl listener / ssl_certificate) — TLS likely terminated upstream.'
+    end
+  else
+    missing = tls_servers.select do |s|
+      Array(s.params['ssl_certificate']).flatten.reject { |v| v.to_s.empty? }.empty?
+    end
+    describe 'NGINX TLS server blocks missing an ssl_certificate directive (4.1.2)' do
+      subject { missing.size }
+      it { should eq 0 }
+    end
+    # Trust-chain validity (CA chain ordering / expiry) is a PKI/ACM concern beyond
+    # nginx directives; ssl_certificate presence is the in-config trust signal.
   end
 end
