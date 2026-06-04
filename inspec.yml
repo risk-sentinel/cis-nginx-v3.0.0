@@ -111,5 +111,77 @@ inputs:
         structured assertions beyond presence (e.g., {"5.7":
         {"threshold": 3}}).
 
+  # ---- automation inputs (sparc-validate#161 — automate, don't attest) ----
+  - name: nginx_approved_ecdh_curves
+    type: array
+    value: ['X25519', 'secp384r1', 'prime256v1', 'secp521r1']
+    description: >-
+      Approved ssl_ecdh_curve groups for TLS 1.3 (C-4.1.6). Any configured
+      ssl_ecdh_curve group outside this set (other than `auto`) fails. Default is
+      the modern strong-curve set.
+  - name: nginx_min_version
+    type: string
+    value: ''
+    description: >-
+      Minimum acceptable NGINX version for C-1.2.2 (e.g. '1.27.0'). When set,
+      C-1.2.2 asserts the running `nginx -v` is >= this. Empty -> the control
+      attests the image-supply-chain controls "latest" instead.
+  - name: nginx_http3_required
+    type: boolean
+    value: false
+    description: >-
+      When true, C-4.1.12 asserts at least one server block has an HTTP/3 listener
+      (`listen ... quic` / `http3 on`). When false (default), HTTP/3 adoption is an
+      opt-in enablement target and the control passes as not-required.
+  - name: nginx_approved_http_methods
+    type: array
+    value: []
+    description: >-
+      Approved HTTP methods (C-5.1.2). When non-empty, the control asserts a
+      method-restriction mechanism (`limit_except`) exists and permits only methods
+      in this set. Empty -> attest per workload (methods vary by location).
+  - name: nginx_require_ip_filtering
+    type: boolean
+    value: false
+    description: >-
+      When true, C-5.1.1 asserts the config contains at least one `allow`/`deny`
+      access directive (IP filtering is in use). When false (default), the access
+      map is consumer-policy-specific and the control attests.
+
+  # ---- document_attestation evidence-class bases (sparc-validate#154) ----
+  # Three evidence classes; provider inferred from each base's URI scheme.
+  # attestation_uri(:class,'name') -> "<base>/<name>.<ext>"; unset base -> '' ->
+  # control SKIPs (saf attest apply-able). Providers: s3:// https://
+  # github://owner/repo/path[@ref] gitlab://<enc-project>/path[@ref] file:///path
+  - name: leveraged_evidence_base
+    type: string
+    value: ''
+    description: >-
+      Base location of leveraged-SYSTEM authorizations the boundary inherits
+      (AWS FedRAMP / SOC 2 / ISO). No inherited controls in this profile today.
+  - name: policy_provider_base
+    type: string
+    value: ''
+    description: >-
+      Base location of policy-PROVIDER documents the boundary leverages (shared /
+      templated / parent-org policies).
+  - name: boundary_docs_base
+    type: string
+    value: ''
+    description: >-
+      Base location of the boundary system's OWN governance docs — including the
+      image-build / supply-chain records that back C-1.2.1 (package-manager repos).
+  - name: c_1_2_1_attestation_uri
+    type: string
+    value: ''
+    description: >-
+      Override URI of the image-build / package-manager-repository configuration
+      record (C-1.2.1). Empty -> resolves via boundary_docs_base; SKIPs if unset.
+  - name: c_1_2_1_attestation_max_age_days
+    type: numeric
+    value: 365
+    description: >-
+      Staleness window (days) for the C-1.2.1 image-build attestation.
+
 supports:
   - platform: container

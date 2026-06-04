@@ -42,9 +42,25 @@ control 'C-1.2.2' do
   tag cis_level:             1
   tag cis_scored:            true
   tag implementation_status: 'alternative'
+  tag attestation_category:  'policy'
   tag exec_validated:        false
 
-  describe 'Requires manual review and attestation' do
-    skip 'Requires manual review and attestation provided for this control ("latest" NGINX version is a container-image bake-time decision enforced by the image supply-chain pipeline; the running workload has no notion of "latest" to assert against)'
+
+  min_version = input('nginx_min_version').to_s.strip
+  if min_version.empty?
+    describe 'NGINX package currency (1.2.2)' do
+      skip 'attestation-required: set nginx_min_version (e.g. "1.27.0") to enable an automated version-floor check; otherwise "latest" is an image-supply-chain bake-time decision the operator attests.'
+    end
+  else
+    out = command('nginx -v')
+    ver = (out.stderr.to_s + out.stdout.to_s)[%r{nginx/(\S+)}, 1]
+    describe "NGINX version (1.2.2 — floor #{min_version})" do
+      it 'is detectable from `nginx -v`' do
+        expect(ver).not_to be_nil
+      end
+      it "is >= #{min_version}" do
+        expect(Gem::Version.new(ver)).to be >= Gem::Version.new(min_version) if ver
+      end
+    end
   end
 end

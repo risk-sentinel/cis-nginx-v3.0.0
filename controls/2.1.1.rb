@@ -61,6 +61,7 @@ control 'C-2.1.1' do
   tag cis_level:             1
   tag cis_scored:            true
   tag implementation_status: 'alternative'
+  tag attestation_category:  'operational'
   tag exec_validated:        false
 
   allowlist = Array(input('nginx_authorized_dynamic_modules'))

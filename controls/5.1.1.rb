@@ -49,9 +49,27 @@ control 'C-5.1.1' do
   tag cis_level:             1
   tag cis_scored:            true
   tag implementation_status: 'alternative'
+  tag attestation_category:  'operational'
   tag exec_validated:        false
 
-  describe 'Requires manual review and attestation' do
-    skip 'Requires manual review and attestation provided for this control (IP allow/deny lists are consumer-policy-specific (admin paths, partner CIDRs, internal-only locations) — a generic scanner cannot decide which paths require which restrictions; operators attest the access map)'
+
+  if !input('nginx_require_ip_filtering')
+    describe 'NGINX IP allow/deny access control (5.1.1)' do
+      skip 'attestation-required: the access map (admin paths, partner CIDRs, internal-only locations) is consumer-policy-specific; set nginx_require_ip_filtering: true to assert at least one allow/deny directive is present, or attest the access map per workload.'
+    end
+  else
+    conf = nginx_conf(input('nginx_conf_path'))
+    directives = Array(nginx_http_values(conf, 'allow')) + Array(nginx_http_values(conf, 'deny'))
+    conf.http.servers.each do |s|
+      directives += Array(s.params['allow']) + Array(s.params['deny'])
+      s.locations.each { |l| directives += Array(l.params['allow']) + Array(l.params['deny']) }
+    end
+    directives = directives.flatten.reject { |v| v.to_s.empty? }
+    describe 'NGINX allow/deny access directives (5.1.1)' do
+      subject { directives.size }
+      it 'has at least one allow/deny filter when IP filtering is required' do
+        expect(directives.size).to be > 0
+      end
+    end
   end
 end

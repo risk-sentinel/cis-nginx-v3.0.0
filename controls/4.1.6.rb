@@ -29,10 +29,36 @@ control 'C-4.1.6' do
   tag cis_version:           '3.0.0'
   tag cis_level:             1
   tag cis_scored:            true
-  tag implementation_status: 'alternative'
+  tag implementation_status: 'implemented'
   tag exec_validated:        false
 
-  describe 'Requires manual review and attestation' do
-    skip 'Requires manual review and attestation provided for this control (TLS 1.3 ECDHE / X25519 group selection is awareness-level only — NGINX picks suitable groups by default and the CIS check is informational, not actionable via a directive assertion)'
+
+  conf = nginx_conf(input('nginx_conf_path'))
+  protocols = Array(nginx_http_values(conf, 'ssl_protocols')).flatten.map(&:to_s)
+  curves    = Array(nginx_http_values(conf, 'ssl_ecdh_curve')).flatten.map(&:to_s)
+  conf.http.servers.each do |s|
+    protocols.concat(Array(s.params['ssl_protocols']).flatten.map(&:to_s))
+    curves.concat(Array(s.params['ssl_ecdh_curve']).flatten.map(&:to_s))
+  end
+  protocols = protocols.flat_map { |v| v.to_s.split }.uniq
+  curves    = curves.flat_map { |v| v.to_s.split(/[:\s]+/) }.reject(&:empty?).uniq
+  approved_curves = Array(input('nginx_approved_ecdh_curves')).map(&:to_s)
+
+  if protocols.empty?
+    describe 'NGINX TLS 1.3 negotiation parameters (4.1.6)' do
+      skip 'not-applicable: no ssl_protocols directive in nginx.conf — TLS is likely terminated upstream (e.g., at the ALB).'
+    end
+  else
+    describe 'NGINX TLS configuration (4.1.6)' do
+      it 'offers TLS 1.3 (TLSv1.3 present in ssl_protocols)' do
+        expect(protocols).to include('TLSv1.3')
+      end
+    end
+    unless curves.empty? || approved_curves.empty?
+      describe 'NGINX ssl_ecdh_curve groups outside the approved TLS 1.3 set' do
+        subject { curves.reject { |c| c == 'auto' || approved_curves.include?(c) } }
+        it { should be_empty }
+      end
+    end
   end
 end
