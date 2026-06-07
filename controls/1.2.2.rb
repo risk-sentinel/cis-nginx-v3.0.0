@@ -43,7 +43,7 @@ control 'C-1.2.2' do
   tag cis_scored:            true
   tag implementation_status: 'alternative'
   tag attestation_category:  'policy'
-  tag exec_validated:        false
+  tag exec_validated:        true
 
 
   min_version = input('nginx_min_version').to_s.strip

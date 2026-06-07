@@ -50,14 +50,43 @@ control 'C-5.1.1' do
   tag cis_scored:            true
   tag implementation_status: 'alternative'
   tag attestation_category:  'operational'
-  tag exec_validated:        false
+  tag exec_validated:        true
 
 
-  if !input('nginx_require_ip_filtering')
-    describe 'NGINX IP allow/deny access control (5.1.1)' do
-      skip 'attestation-required: the access map (admin paths, partner CIDRs, internal-only locations) is consumer-policy-specific; set nginx_require_ip_filtering: true to assert at least one allow/deny directive is present, or attest the access map per workload.'
+  allowed_cidrs = Array(input('nginx_allowed_cidrs')).map(&:to_s).reject(&:empty?)
+
+  if !allowed_cidrs.empty?
+    # Strongest path: validate the loaded config's `allow` directives cover every
+    # consumer-specified trusted CIDR, and that a default `deny all;` is enforced.
+    conf   = nginx_conf(input('nginx_conf_path'))
+    allows = Array(nginx_http_values(conf, 'allow'))
+    denies = Array(nginx_http_values(conf, 'deny'))
+    conf.http.servers.each do |s|
+      allows += Array(s.params['allow'])
+      denies += Array(s.params['deny'])
+      s.locations.each do |l|
+        allows += Array(l.params['allow'])
+        denies += Array(l.params['deny'])
+      end
     end
-  else
+    allows = allows.flatten.map(&:to_s).reject(&:empty?)
+    denies = denies.flatten.map(&:to_s).reject(&:empty?)
+    missing = allowed_cidrs.reject { |c| allows.include?(c) }
+
+    describe 'NGINX allow directives covering nginx_allowed_cidrs (5.1.1)' do
+      subject { missing }
+      it 'every trusted CIDR has a matching allow directive' do
+        expect(missing).to be_empty
+      end
+    end
+    describe 'NGINX default-deny (5.1.1)' do
+      subject { denies.map(&:strip) }
+      it 'enforces a deny all; default' do
+        expect(denies.map(&:strip)).to include('all')
+      end
+    end
+  elsif input('nginx_require_ip_filtering')
+    # Weaker presence check: at least one allow/deny directive exists.
     conf = nginx_conf(input('nginx_conf_path'))
     directives = Array(nginx_http_values(conf, 'allow')) + Array(nginx_http_values(conf, 'deny'))
     conf.http.servers.each do |s|
@@ -70,6 +99,10 @@ control 'C-5.1.1' do
       it 'has at least one allow/deny filter when IP filtering is required' do
         expect(directives.size).to be > 0
       end
+    end
+  else
+    describe 'NGINX IP allow/deny access control (5.1.1)' do
+      skip 'attestation-required: set nginx_allowed_cidrs to the trusted source ranges to validate them automatically, or nginx_require_ip_filtering: true to assert at least one allow/deny directive is present, or attest the access map per workload.'
     end
   end
 end
