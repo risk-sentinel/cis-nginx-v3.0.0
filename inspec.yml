@@ -146,7 +146,19 @@ inputs:
     description: >-
       When true, C-5.1.1 asserts the config contains at least one `allow`/`deny`
       access directive (IP filtering is in use). When false (default), the access
-      map is consumer-policy-specific and the control attests.
+      map is consumer-policy-specific and the control attests. Superseded by
+      nginx_allowed_cidrs when that is set (which validates the exact ranges).
+
+  - name: nginx_allowed_cidrs
+    type: array
+    value: []
+    description: >-
+      Trusted source IP addresses / CIDR ranges the consumer permits via NGINX
+      `allow` directives. When non-empty, C-5.1.1 validates that every entry is
+      present as an `allow` directive in the loaded config AND that a default
+      `deny all;` is enforced — automated, exec-validatable enforcement of the
+      access map. Empty (default) falls back to nginx_require_ip_filtering (weak
+      presence check) or, failing that, an attestation skip.
 
   - name: nginx_tls_termination
     type: string

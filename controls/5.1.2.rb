@@ -81,7 +81,7 @@ control 'C-5.1.2' do
   tag cis_scored:            true
   tag implementation_status: 'alternative'
   tag attestation_category:  'operational'
-  tag exec_validated:        false
+  tag exec_validated:        true
 
 
   approved = Array(input('nginx_approved_http_methods')).map { |m| m.to_s.upcase }
